@@ -135,53 +135,47 @@ app.post('/recipes', async function(req, res) {
         const recipeId = recipeResult.insertId;
         console.log('Recipe inserted with ID:', recipeId);
 
-        // 2. Handle ingredients - with explicit error handling for each ingredient
+        // 2. Handle ingredients
         for (const ing of recipe.ingredients) {
-            try {
-                if (!ing.name || !ing.quantity || !ing.unit) {
-                    console.log('Skipping incomplete ingredient:', ing);
-                    continue;
-                }
+            if (!ing.name || !ing.quantity || !ing.unit) {
+                console.log('Skipping incomplete ingredient:', ing);
+                continue;
+            }
 
-                console.log('Processing ingredient:', ing.name);
+            console.log('Processing ingredient:', ing.name);
+            
+            // Use LOWER() for case-insensitive search
+            const [existingIngredients] = await db.promise().query(
+                'SELECT ingredients_id FROM ingredients WHERE LOWER(name) = LOWER(?)',
+                [ing.name.trim()]
+            );
+            
+            console.log('Existing ingredients check result:', existingIngredients);
+
+            let ingredientId;
+            if (existingIngredients.length === 0) {
+                // Insert new ingredient
+                console.log('Inserting new ingredient:', ing.name);
                 
-                // Use LOWER() for case-insensitive search
-                const [existingIngredients] = await db.promise().query(
-                    'SELECT ingredients_id FROM ingredients WHERE LOWER(name) = LOWER(?)',
+                const [newIngredient] = await db.promise().query(
+                    'INSERT INTO ingredients (name) VALUES (?)',
                     [ing.name.trim()]
                 );
                 
-                console.log('Existing ingredients check result:', existingIngredients);
-
-                let ingredientId;
-                if (existingIngredients.length === 0) {
-                    // Insert new ingredient with explicit query logging
-                    console.log('Inserting new ingredient:', ing.name);
-                    
-                    const insertQuery = 'INSERT INTO ingredients (name) VALUES (?)';
-                    console.log('Query:', insertQuery, 'Params:', [ing.name.trim()]);
-                    
-                    const [newIngredient] = await db.promise().query(insertQuery, [ing.name.trim()]);
-                    
-                    console.log('Insert result:', newIngredient);
-                    ingredientId = newIngredient.insertId;
-                    console.log('New ingredient ID:', ingredientId);
-                } else {
-                    ingredientId = existingIngredients[0].ingredients_id;
-                    console.log('Using existing ingredient with ID:', ingredientId);
-                }
-
-                // Insert recipe-ingredient relationship
-                await db.promise().query(
-                    `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit) 
-                     VALUES (?, ?, ?, ?)`,
-                    [recipeId, ingredientId, ing.quantity, ing.unit]
-                );
-                console.log('Added ingredient relationship for:', ing.name);
-            } catch (ingError) {
-                console.error('Error processing ingredient:', ing.name, ingError);
-                throw ingError; // Re-throw to trigger rollback
+                ingredientId = newIngredient.insertId;
+                console.log('New ingredient ID:', ingredientId);
+            } else {
+                ingredientId = existingIngredients[0].ingredients_id;
+                console.log('Using existing ingredient with ID:', ingredientId);
             }
+
+            // Insert recipe-ingredient relationship
+            await db.promise().query(
+                `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit) 
+                 VALUES (?, ?, ?, ?)`,
+                [recipeId, ingredientId, ing.quantity, ing.unit]
+            );
+            console.log('Added ingredient relationship for:', ing.name);
         }
 
         // Verify ingredients were added
