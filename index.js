@@ -10,6 +10,7 @@ app.use(cors({
 
 app.use(express.json());
 
+// db connection
 const db = mysql.createConnection({
     host: "localhost",
     user: "root",
@@ -17,6 +18,7 @@ const db = mysql.createConnection({
     database: "recipe_book"
 });
 
+// get all users
 app.get('/users', function(req,res) {
     db.query("SELECT * FROM users", (error, result, fields) => {
         if (error) {
@@ -27,6 +29,7 @@ app.get('/users', function(req,res) {
     });
 });
 
+// get user by id
 app.get('/users/:id', function(req,res) {
     // id - route parameter
     let userId=Number(req.params.id);
@@ -35,6 +38,7 @@ app.get('/users/:id', function(req,res) {
     });
 });
 
+// delete user
 app.delete('/users/:id', function(req,res) {
     let userId=Number(req.params.id);
     // validation
@@ -47,6 +51,7 @@ app.delete('/users/:id', function(req,res) {
         });
     }
 });
+
 //insert new user
 app.post('/users', async function(req,res) {
     let newUser=req.body;
@@ -57,7 +62,6 @@ app.post('/users', async function(req,res) {
         password: hashedPassword
     }
     
-
     db.query(`INSERT INTO users(first_name, last_name,email,password,birth_date) VALUES(?,?,?,?,?)`, [userInfo.first_name, userInfo.last_name, userInfo.email, userInfo.password, userInfo.birth_date], (error, result, fields) => {
         if (error) {
             console.log(error);
@@ -73,24 +77,33 @@ app.post('/users', async function(req,res) {
         }
     });
 });
+
 //user login
 app.post('/login', function(req,res) {
+    console.log("test1");
+    console.log(req.body);
     let { email, password } = req.body;
     db.query(`SELECT * FROM users WHERE email=?`, [email], async (error, result, fields) => {
         if (result.length===0) {
+            console.log("email not found after query");
             res.status(200).json({ found: false });
         } else {
+            console.log("email found after query");
             const userPassword=result[0].password;
+            console.log("userPassword",userPassword);
             const match = await bcrypt.compare(password,userPassword);
             if (!match) {
                 res.status(200).json({ found: false });
+                console.log("password not matched");
             } else {
-                res.status(200).json({ found: true, data: result[0] });
+                res.status(200).json({ found: true, data: result[0] }); 
+                console.log("password matched");
             }
         }
     });
 });
 
+// add new recipe
 // First, modify the ingredients handling in the recipe POST endpoint:
 app.post('/recipes', async function(req, res) {
     console.log('Received recipe:', req.body);
@@ -103,8 +116,8 @@ app.post('/recipes', async function(req, res) {
 
     try {
         // Get valid user_id first
-        const [users] = await db.promise().query('SELECT user_id FROM users LIMIT 1');
-        const userId = users[0].user_id;
+       // const [users] = await db.promise().query('SELECT user_id FROM users LIMIT 1');
+       // const userId = users[0].user_id;
 
         // Start transaction
         await db.promise().query('START TRANSACTION');
@@ -122,15 +135,16 @@ app.post('/recipes', async function(req, res) {
                 recipe.description || null,
                 recipe.portionSize,
                 recipe.cookingTime || null,
-                recipe.preprationTime || null,
+                recipe.preparationTime || null,
                 recipe.cookingSteps,
                 recipe.notes || null,
                 recipe.rating || null,
                 recipe.source || null,
                 recipe.category || null,
-                userId
+                recipe.user
             ]
         );
+        console.log(recipeResult);
 
         const recipeId = recipeResult.insertId;
         console.log('Recipe inserted with ID:', recipeId);
@@ -178,7 +192,7 @@ app.post('/recipes', async function(req, res) {
             console.log('Added ingredient relationship for:', ing.name);
         }
 
-        // Verify ingredients were added
+       // Verify ingredients were added
         const [ingredientsCheck] = await db.promise().query(
             'SELECT i.name FROM ingredients i JOIN recipe_ingredients ri ON i.ingredients_id = ri.ingredient_id WHERE ri.recipe_id = ?',
             [recipeId]
@@ -202,6 +216,19 @@ app.post('/recipes', async function(req, res) {
             stack: error.stack
         });
     }
+});
+
+
+// Get all recipes
+app.get('/recipes', function(req, res) {
+    db.query("SELECT * FROM recipes", (error, result) => {
+        if (error) {
+            console.error('Error fetching recipes:', error);
+            res.status(500).json({ message: error.message });
+        } else {
+            res.status(200).json(result);
+        }
+    });
 });
 
 // Get all ingredients
