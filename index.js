@@ -387,6 +387,34 @@ app.put('/recipes/:id', async function(req, res) {
     }
 });
 
+// Delete recipe and its ingredients
+app.delete('/recipes/:id', async function(req, res) {
+    const recipeId = Number(req.params.id);
+    
+    try {
+        await db.promise().query('START TRANSACTION');
+
+        // First delete from recipe_ingredients (due to foreign key constraint)
+        await db.promise().query(
+            'DELETE FROM recipe_ingredients WHERE recipe_id = ?',
+            [recipeId]
+        );
+
+        // Then delete the recipe
+        await db.promise().query(
+            'DELETE FROM recipes WHERE recipe_id = ?',
+            [recipeId]
+        );
+
+        await db.promise().query('COMMIT');
+        res.status(200).json({ message: "Recipe deleted successfully" });
+    } catch (error) {
+        await db.promise().query('ROLLBACK');
+        console.error('Error deleting recipe:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // error route
 app.use((req, res, next) => {
     res.status(404).send('Wrong route!');
