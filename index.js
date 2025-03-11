@@ -103,6 +103,21 @@ app.post('/login', function(req,res) {
     });
 });
 
+// get recipes for specific user_id
+app.get('/recipes/user/:id', function(req,res) {
+    console.log(req.params);
+    // id - route parameter
+    let userId=Number(req.params.id);
+    db.query(`SELECT * FROM recipes WHERE user_id=${userId}`, (error, result, fields) => {
+        if (error) {
+            console.error('Error fetching ingredients:', error);
+            res.status(500).json({ message: error.message });
+        } else {
+            res.status(200).json(result);
+        }
+    });
+});
+
 // add new recipe
 // First, modify the ingredients handling in the recipe POST endpoint:
 app.post('/recipes', async function(req, res) {
