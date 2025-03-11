@@ -270,6 +270,123 @@ app.get('/tags', function(req, res) {
     });
 });
 
+// Get recipe by ID with ingredients
+app.get('/recipes/:id', async function(req, res) {
+    const recipeId = Number(req.params.id);
+    try {
+        // Get recipe details
+        const [recipe] = await db.promise().query(
+            `SELECT * FROM recipes WHERE recipe_id = ?`,
+            [recipeId]
+        );
+
+        if (recipe.length === 0) {
+            return res.status(404).json({ message: "Recipe not found" });
+        }
+
+        // Get recipe ingredients
+        const [ingredients] = await db.promise().query(
+            `SELECT i.name, ri.quantity, ri.unit 
+             FROM recipe_ingredients ri 
+             JOIN ingredients i ON ri.ingredient_id = i.ingredients_id 
+             WHERE ri.recipe_id = ?`,
+            [recipeId]
+        );
+
+        const recipeData = {
+            ...recipe[0],
+            ingredients: ingredients
+        };
+
+        res.status(200).json(recipeData);
+    } catch (error) {
+        console.error('Error fetching recipe:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Update recipe
+app.put('/recipes/:id', async function(req, res) {
+    const recipeId = Number(req.params.id);
+    const recipe = req.body;
+
+    try {
+        await db.promise().query('START TRANSACTION');
+
+        // 1. Update main recipe
+        await db.promise().query(
+            `UPDATE recipes SET 
+                title = ?, 
+                description = ?, 
+                portion_size = ?, 
+                cooking_time = ?, 
+                prepration_time = ?, 
+                steps = ?,
+                notes = ?, 
+                ratings = ?,
+                source = ?, 
+                category = ?
+            WHERE recipe_id = ?`,
+            [
+                recipe.title,
+                recipe.description || null,
+                recipe.portionSize,
+                recipe.cookingTime || null,
+                recipe.preparationTime || null,
+                recipe.cookingSteps,
+                recipe.notes || null,
+                recipe.rating || null,
+                recipe.source || null,
+                recipe.category || null,
+                recipeId
+            ]
+        );
+
+        // 2. Delete existing ingredients
+        await db.promise().query(
+            'DELETE FROM recipe_ingredients WHERE recipe_id = ?',
+            [recipeId]
+        );
+
+        // 3. Add new ingredients
+        for (const ing of recipe.ingredients) {
+            if (!ing.name || !ing.quantity || !ing.unit) continue;
+
+            // Check if ingredient exists
+            const [existingIngredients] = await db.promise().query(
+                'SELECT ingredients_id FROM ingredients WHERE LOWER(name) = LOWER(?)',
+                [ing.name.trim()]
+            );
+
+            let ingredientId;
+            if (existingIngredients.length === 0) {
+                // Insert new ingredient
+                const [newIngredient] = await db.promise().query(
+                    'INSERT INTO ingredients (name) VALUES (?)',
+                    [ing.name.trim()]
+                );
+                ingredientId = newIngredient.insertId;
+            } else {
+                ingredientId = existingIngredients[0].ingredients_id;
+            }
+
+            // Insert recipe-ingredient relationship
+            await db.promise().query(
+                `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit) 
+                 VALUES (?, ?, ?, ?)`,
+                [recipeId, ingredientId, ing.quantity, ing.unit]
+            );
+        }
+
+        await db.promise().query('COMMIT');
+        res.status(200).json({ message: "Recipe updated successfully" });
+    } catch (error) {
+        await db.promise().query('ROLLBACK');
+        console.error('Error updating recipe:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // error route
 app.use((req, res, next) => {
     res.status(404).send('Wrong route!');
