@@ -415,6 +415,40 @@ app.delete('/recipes/:id', async function(req, res) {
     }
 });
 
+
+// Get weekly planner data
+app.get('/planner/user/:id', function(req, res) {
+    console.log("start");
+    console.log(req.params);
+    let userId=Number(req.params.id);
+    db.query(`SELECT * FROM weekly_planner, recipes WHERE weekly_planner.recipe_id=recipes.recipe_id AND recipes.user_id=${userId}`, (error, result) => {
+        if (error) {
+            console.error('Error fetching planner:', error);
+            res.status(500).json({ message: error.message });
+        } else {
+            console.log("success");
+            console.log(result);
+            res.status(200).json(result);
+        }
+    });
+});
+
+//post planner data
+app.post('/planner', async function(req,res) {
+    const plan = req.body;
+    console.log(plan);
+    console.log(plan.recipe_id);
+    db.query(`INSERT INTO weekly_planner(recipe_id, date,meal_time) VALUES(?,?,?)`, [plan.recipe_id,plan.date,plan.meal_time], (error, result, fields) => {
+        if (error) {
+            console.log(error);
+            console.error('Error inserting planner:', error);
+            res.status(500).json({ message: error.message });
+        } else {
+            res.status(200).json({ message: "Plan entry created" });
+        }
+    });
+});
+
 // error route
 app.use((req, res, next) => {
     res.status(404).send('Wrong route!');
