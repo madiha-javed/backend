@@ -434,19 +434,41 @@ app.get('/planner/user/:id', function(req, res) {
 });
 
 //post planner data
-app.post('/planner', async function(req,res) {
+app.post('/planner', async function(req, res) {
     const plan = req.body;
-    console.log(plan);
-    console.log(plan.recipe_id);
-    db.query(`INSERT INTO weekly_planner(recipe_id, date,meal_time) VALUES(?,?,?)`, [plan.recipe_id,plan.date,plan.meal_time], (error, result, fields) => {
-        if (error) {
-            console.log(error);
-            console.error('Error inserting planner:', error);
-            res.status(500).json({ message: error.message });
-        } else {
-            res.status(200).json({ message: "Plan entry created" });
+    
+    try {
+        // First check if recipe exists
+        const [recipeExists] = await db.promise().query(
+            'SELECT recipe_id FROM recipes WHERE recipe_id = ?',
+            [plan.recipe_id]
+        );
+
+        if (recipeExists.length === 0) {
+            return res.status(404).json({ 
+                message: "Recipe not found. Cannot add non-existent recipe to planner." 
+            });
         }
-    });
+
+        // If recipe exists, proceed with insertion
+        const [result] = await db.promise().query(
+            `INSERT INTO weekly_planner(recipe_id, date, meal_time) 
+             VALUES (?, ?, ?)`,
+            [plan.recipe_id, plan.date, plan.meal_time]
+        );
+
+        res.status(201).json({ 
+            message: "Plan entry created successfully",
+            plannerId: result.insertId
+        });
+
+    } catch (error) {
+        console.error('Error inserting planner:', error);
+        res.status(500).json({ 
+            message: "Failed to create plan entry",
+            error: error.message 
+        });
+    }
 });
 
 // error route
