@@ -394,13 +394,19 @@ app.delete('/recipes/:id', async function(req, res) {
     try {
         await db.promise().query('START TRANSACTION');
 
-        // First delete from recipe_ingredients (due to foreign key constraint)
+        // First delete from weekly_planner (since it references the recipe)
+        await db.promise().query(
+            'DELETE FROM weekly_planner WHERE recipe_id = ?',
+            [recipeId]
+        );
+
+        // Then delete from recipe_ingredients
         await db.promise().query(
             'DELETE FROM recipe_ingredients WHERE recipe_id = ?',
             [recipeId]
         );
 
-        // Then delete the recipe
+        // Finally delete the recipe
         await db.promise().query(
             'DELETE FROM recipes WHERE recipe_id = ?',
             [recipeId]
